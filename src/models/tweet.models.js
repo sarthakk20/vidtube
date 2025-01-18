@@ -4,7 +4,6 @@ const tweetSchema = new Schema(
   {
     content: {
       type: String,
-      default: true,
       required: true,
     },
     owner: {
@@ -14,3 +13,5 @@ const tweetSchema = new Schema(
   },
   { timestamps: true }
 );
+
+export const Tweet = mongoose.model("Tweet", tweetSchema);
