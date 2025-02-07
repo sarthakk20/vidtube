@@ -53,7 +53,7 @@ const Userschema = new Schema(
 // Using the pre hooks to encryt the password before saving it
 
 Userschema.pre("save", async function (next) {
-  if (!this.modified("password")) return next();
+  if (!this.isModified("password")) return next();
 
   this.password = bcrypt.hash(this.password, 10);
   next();
