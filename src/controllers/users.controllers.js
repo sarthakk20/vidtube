@@ -6,6 +6,7 @@ import {
   uploadToCloudinary,
   deleteFromCloudinary,
 } from "../utils/cloudinary.js";
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -106,7 +107,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
     return res
       .status(201)
-      .json(new ApiResponse(200, createUser, "User registed succesfully"));
+      .json(new ApiResponse(200, createUser, "User registered succesfully"));
   } catch (error) {
     console.log("User creation failed");
     if (avatar) {
@@ -160,7 +161,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const options = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === " production",
+    secure: process.env.NODE_ENV === "production",
   };
 
   res
@@ -170,4 +171,76 @@ const loginUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, loggedInUser, "User logged in successfully"));
 });
 
-export { registerUser, loginUser };
+const logoutUser = asyncHandler(async (req, res) => {
+  User.findByIdAndUpdate(
+    req.user._id, 
+    { 
+      $set:{ 
+        refreshToken: "" 
+      }
+    },
+    {new : true}
+    );
+
+  const options = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  };
+
+  res
+    .statusCode(200)
+    .clearcookie("accessToken", accessToken, options)
+    .clearcookie("refreshToken", refreshToken, options)
+    .json(new ApiResponse(200, {}, "User logged out successfully"));
+});
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Refressh Token is Required");
+  }
+
+  try {
+    const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+
+    const user = User.findById(decodedToken?._id);
+
+    if (!user) {
+      throw new ApiError(401, "User not found");
+    }
+
+    if(incomingRefreshToken !== user.refreshToken){
+      throw new ApiError(401, "Invalid Refresh Token");
+    }
+
+    const options={
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production"
+    }
+
+    const {accessToken, refreshToken: newRefreshToken} = await generateAccessAndRefreshToken(user._id);
+
+    res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", newRefreshToken, options)
+    .json(
+      new ApiResponse
+      (200, 
+        {accessToken, 
+        refreshToken: newRefreshToken},
+        "Access Token refreshed successfully"
+        ));
+
+  } catch (error) {
+    throw new ApiError(500, "Something went wrong while refreshing token");
+  }
+})
+
+export {
+    registerUser,
+    loginUser,
+    refreshAccessToken,
+    logoutUser
+    };
